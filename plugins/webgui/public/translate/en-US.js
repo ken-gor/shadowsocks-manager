@@ -75,6 +75,7 @@ module.exports = {
 
   '最新注册用户': 'Recent Registrations',
   '最近登录用户': 'Recent Logins',
+  '今日流量排行': 'Recent Bandwidth Usage',
   '支付宝订单': 'Alipay Orders',
   'PayPal订单': 'PayPal Orders',
   '订单号：': 'Order No.:',
