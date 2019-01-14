@@ -84,6 +84,8 @@ module.exports = {
   '创建时间：': 'Creation Time:',
   '状态：': 'Status:',
 
+  '显示流量': 'Show Bandwidth',
+  '显示图表': 'Show Chart',
   '本日流量：': 'Today:',
   '本周流量：': 'This Week:',
   '本月流量：': 'This Month:',
