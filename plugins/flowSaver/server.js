@@ -16,6 +16,7 @@ const add = async options => {
     key,
     net,
     wgPort,
+    tjPort,
   } = options;
   const [ serverId ] = await knex('server').insert({
     type,
@@ -30,6 +31,7 @@ const add = async options => {
     key,
     net,
     wgPort,
+    tjPort,
   });
   accountFlow.addServer(serverId);
   return [ serverId ];
@@ -49,7 +51,7 @@ const edit = async options => {
     id,
     type = 'Shadowsocks',
     name, host, port, password, method, scale = 1, comment = '', shift = 0,
-    key, net, wgPort,
+    key, net, wgPort, tjPort,
     check,
   } = options;
   const serverInfo = await knex('server').where({ id }).then(s => s[0]);
@@ -82,6 +84,7 @@ const edit = async options => {
     key,
     net,
     wgPort,
+    tjPort,
   });
 };
 
@@ -100,6 +103,7 @@ const list = async (options = {}) => {
     'key',
     'net',
     'wgPort',
+    'tjPort',
   ]).orderBy('name');
   if(options.status) {
     const serverStatus = [];
@@ -111,7 +115,7 @@ const list = async (options = {}) => {
         port: server.port,
         password: server.password,
       }).then(success => {
-        return { status: success.version, isGfw: success.isGfw, index };
+        return { status: success.version, isGfw: success.isGfw, number: success.number || 1, index };
       }).catch(error => {
         return { status: -1, index };
       });
@@ -123,6 +127,7 @@ const list = async (options = {}) => {
     status.forEach(f => {
       serverList[f.index].status = f.status;
       serverList[f.index].isGfw = !!f.isGfw;
+      serverList[f.index].number = f.number;
     });
   }
   return serverList;

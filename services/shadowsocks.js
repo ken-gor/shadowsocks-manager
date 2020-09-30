@@ -1,11 +1,13 @@
 const log4js = require('log4js');
 const logger = log4js.getLogger('system');
-const cron = appRequire('init/cron');
+const later = require('later');
+later.date.localTime();
+// const cron = appRequire('init/cron');
 const dgram = require('dgram');
 const client = dgram.createSocket('udp4');
 const version = appRequire('package').version;
 const exec = require('child_process').exec;
-const http = require('http');
+const https = require('https');
 
 let clientIp = [];
 
@@ -166,11 +168,11 @@ const resend = async () => {
   }
 };
 
-let restartFlow = 300;
+const restart = {};
 const compareWithLastFlow = async (flow, lastFlow) => {
   if(shadowsocksType === 'python') {
     return flow;
-  } 
+  }
   const realFlow = {};
   if(!lastFlow) {
     for(const f in flow) {
@@ -178,17 +180,20 @@ const compareWithLastFlow = async (flow, lastFlow) => {
     }
     return flow;
   }
-  if(restartFlow > 50) { restartFlow--; }
   for(const f in flow) {
     if(lastFlow[f]) {
       realFlow[f] = flow[f] - lastFlow[f];
-      if(realFlow[f] === 0 && flow[f] > restartFlow * 1000 * 1000) {
-        restartFlow += 10;
+      if(realFlow[f] === 0 && flow[f] > 5 * 1000 * 1000 * 1000) {
+        if(!restart[f]) { restart[f] = 1; }
+        if(restart[f] < 30) { restart[f] += 1; continue; }
         const account = await knex('account').where({ port: +f }).then(s => s[0]);
         if(account) {
           await sendMessage(`remove: {"server_port": ${ account.port }}`);
           await sendMessage(`add: {"server_port": ${ account.port }, "password": "${ account.password }"}`);
+          delete restart[f];
         }
+      } else {
+        delete restart[f];
       }
     } else {
       realFlow[f] = flow[f];
@@ -205,11 +210,16 @@ const compareWithLastFlow = async (flow, lastFlow) => {
 
 connect();
 startUp();
-cron.minute(() => {
+later.setInterval(() => {
   resend();
   sendPing();
   getGfwStatus();
-}, 1);
+}, later.parse.text('every 1 mins'));
+// cron.minute(() => {
+//   resend();
+//   sendPing();
+//   getGfwStatus();
+// }, 1);
 
 const checkPortRange = (port) => {
   if(!config.shadowsocks.portRange) { return true; }
@@ -319,16 +329,16 @@ let getGfwStatusTime = null;
 const getGfwStatus = () => {
   if(getGfwStatusTime && isGfw === 0 && Date.now() - getGfwStatusTime < 600 * 1000) { return; }
   getGfwStatusTime = Date.now();
-  const sites = [
-    'baidu.com:80',
-  ];
-  const site = sites[+Math.random().toString().substr(2) % sites.length];
-  const req = http.request({
+  let site = 'baidu.com';
+  if(config.isGfwUrl) {
+    site = config.isGfwUrl;
+  }
+  const req = https.request({
     hostname: site.split(':')[0],
-    port: +site.split(':')[1],
+    port: +site.split(':')[1] || 443,
     path: '/',
     method: 'GET',
-    timeout: 2000,
+    timeout: 8000 + isGfw * 2000,
   }, res => {
     if(res.statusCode === 200) {
       isGfw = 0;

@@ -15,6 +15,7 @@ const macAccount = appRequire('plugins/macAccount/index');
 const refOrder = appRequire('plugins/webgui_ref/order');
 const refUser = appRequire('plugins/webgui_ref/user');
 const flowPack = appRequire('plugins/webgui_order/flowPack');
+const accountFlow = appRequire('plugins/account/accountFlow');
 
 exports.getAccount = (req, res) => {
   const group = req.adminInfo.id === 1 ? -1 : req.adminInfo.group;
@@ -80,6 +81,7 @@ exports.getOneAccount = async (req, res) => {
       return Promise.reject('account not found');
     }
     accountInfo.data = JSON.parse(accountInfo.data);
+    accountInfo.server = accountInfo.server ? JSON.parse(accountInfo.server) : accountInfo.server;
     if(accountInfo.type >= 2 && accountInfo.type <= 5) {
       const time = {
         '2': 7 * 24 * 3600000,
@@ -94,7 +96,6 @@ exports.getOneAccount = async (req, res) => {
         accountInfo.data.from = accountInfo.data.to;
         accountInfo.data.to = accountInfo.data.from + time[accountInfo.type];
       }
-      accountInfo.server = accountInfo.server ? JSON.parse(accountInfo.server) : accountInfo.server;
       accountInfo.data.flowPack = await flowPack.getFlowPack(accountId, accountInfo.data.from, accountInfo.data.to);
     }
     accountInfo.publicKey = '';
@@ -107,6 +108,18 @@ exports.getOneAccount = async (req, res) => {
         accountInfo.publicKey = accountInfo.key;
       }
     }
+    await accountFlow.edit(accountInfo.id);
+
+    const onlines = await account.getOnlineAccount();
+    const serversWithoutWireGuard = await knex('server').select(['id']).where({ type: 'Shadowsocks' }).then(s => s.map(m => m.id));
+    accountInfo.idle = serversWithoutWireGuard.filter(server => {
+      if(accountInfo.server) {
+        return accountInfo.server.includes(server);
+      }
+      return true;
+    }).sort((a, b) => {
+      return (onlines[a] || 0)  - (onlines[b] || 0);
+    })[0];
     return res.send(accountInfo);
   } catch(err) {
     console.log(err);
@@ -131,13 +144,15 @@ exports.addAccount = (req, res) => {
       const autoRemoveDelay = +req.body.autoRemoveDelay || 0;
       const multiServerFlow = +req.body.multiServerFlow || 0;
       const server = req.body.server ? JSON.stringify(req.body.server) : null;
+      const user = req.body.user || null;
       return account.addAccount(type, {
         port, password, time, limit, flow, autoRemove, autoRemoveDelay, server, multiServerFlow, orderId,
+        user,
       });
     }
     result.throw();
   }).then(success => {
-    res.send('success');
+    res.send({ id: success });
   }).catch(err => {
     console.log(err);
     res.status(403).end();
@@ -211,7 +226,8 @@ exports.changeAccountTime = (req, res) => {
 
 exports.getRecentSignUpUsers = (req, res) => {
   const group = req.adminInfo.id === 1 ? -1 : req.adminInfo.group;
-  user.getRecentSignUp(5, group).then(success => {
+  const number = req.query.number ? +req.query.number : 5;
+  user.getRecentSignUp(number, group).then(success => {
     return res.send(success);
   }).catch(err => {
     console.log(err);
@@ -221,7 +237,8 @@ exports.getRecentSignUpUsers = (req, res) => {
 
 exports.getRecentLoginUsers = (req, res) => {
   const group = req.adminInfo.id === 1 ? -1 : req.adminInfo.group;
-  user.getRecentLogin(5, group).then(success => {
+  const number = req.query.number ? +req.query.number : 5;
+  user.getRecentLogin(number, group).then(success => {
     return res.send(success);
   }).catch(err => {
     console.log(err);
@@ -586,7 +603,7 @@ exports.getAccountIpInfo = (req, res) => {
       if(success.code !== 0) {
         return Promise.reject(success.code);
       }
-      const result = [success.data.region + success.data.city, success.data.isp];
+      const result = [success.data.region + (success.data.region === success.data.city ? '' : success.data.city), success.data.isp];
       return result;
     });
   };

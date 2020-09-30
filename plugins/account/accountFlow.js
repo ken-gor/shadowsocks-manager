@@ -1,5 +1,6 @@
 const knex = appRequire('init/knex').knex;
 const manager = appRequire('services/manager');
+const { createHash } = require('crypto');
 
 const add = async accountId => {
   const servers = await knex('server').select();
@@ -52,7 +53,20 @@ const pwd = async (accountId, password) => {
         port: server.port,
         password: server.password,
       });
-    } else {
+    } else if(server.type === 'Trojan') {
+      const pwd = createHash('sha224')
+        .update(`${accountInfo.port}:${password}`, 'utf8')
+        .digest('hex');
+      manager.send({
+        command: 'add',
+        port: accountInfo.port,
+        password: pwd,
+      }, {
+        host: server.host,
+        port: server.port,
+        password: server.password,
+      });
+    } else if(server.type === 'Shadowsocks'){
       manager.send({
         command: 'pwd',
         port: accountInfo.port + server.shift,
@@ -108,9 +122,25 @@ const server = async serverId => {
   }
 };
 
+const updateFlow = async (serverId, accountId, flow) => {
+  const exists = await knex('account_flow').where({
+    serverId,
+    accountId,
+  }).then(success => success[0]);
+  if(!exists) { return; }
+  await knex('account_flow').update({
+    flow: exists.flow + flow,
+    updateTime: Date.now(),
+  }).where({
+    serverId,
+    accountId,
+  });
+};
+
 exports.add = add;
 exports.del = del;
 exports.pwd = pwd;
 exports.edit = edit;
 exports.addServer = server;
 exports.editServer = server;
+exports.updateFlow = updateFlow;

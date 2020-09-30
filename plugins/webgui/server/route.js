@@ -59,6 +59,11 @@ app.post('/api/home/code', home.sendCode);
 app.post('/api/home/ref/:refCode', home.visitRef);
 app.post('/api/home/signup', home.signup);
 app.post('/api/home/login', home.login);
+app.post('/api/home/googleLogin', home.googleLogin);
+app.post('/api/home/facebookLogin', home.facebookLogin);
+app.post('/api/home/githubLogin', home.githubLogin);
+app.get('/api/home/twitterLogin', home.getTwitterLoginUrl);
+app.post('/api/home/twitterLogin', home.twitterLogin);
 app.post('/api/home/macLogin', home.macLogin);
 app.post('/api/home/logout', home.logout);
 app.post('/api/home/password/sendEmail', home.sendResetPasswordEmail);
@@ -191,13 +196,18 @@ app.post('/api/admin/order', isAdmin, isSuperAdmin, adminOrder.newOrder);
 app.put('/api/admin/order/:orderId(\\d+)', isAdmin, isSuperAdmin, adminOrder.editOrder);
 app.delete('/api/admin/order/:orderId(\\d+)', isAdmin, isSuperAdmin, adminOrder.deleteOrder);
 
+app.get('/api/admin/tag', isAdmin, isSuperAdmin, adminServer.getTags);
+app.put('/api/admin/tag', isAdmin, isSuperAdmin, adminServer.setTags);
+
 app.get('/api/user/notice', isUser, user.getNotice);
 app.get('/api/user/account', isUser, user.getAccount);
+app.get('/api/user/usage', isUser, user.getAccountUsage);
 app.get('/api/user/account/mac', isUser, user.getMacAccount);
 app.post('/api/user/account/mac', isUser, user.addMacAccount);
 app.get('/api/user/account/:accountId(\\d+)', isUser, user.getOneAccount);
 app.put('/api/user/account/:accountId(\\d+)/active', isUser, user.activeAccount);
 app.get('/api/user/account/:accountId(\\d+)/subscribe', isUser, user.getAccountSubscribe);
+app.get('/api/admin/account/:accountId(\\d+)/subscribe', isAdmin, user.getAdminAccountSubscribe);
 app.put('/api/user/account/:accountId(\\d+)/subscribe', isUser, user.updateAccountSubscribe);
 app.get('/api/user/server', isUser, user.getServers);
 app.get('/api/user/flow/:serverId(\\d+)/:accountId(\\d+)', isUser, user.getServerPortFlow);
@@ -239,6 +249,12 @@ if (config.plugins.webgui_telegram && config.plugins.webgui_telegram.use) {
 if (config.plugins.webgui.gcmAPIKey && config.plugins.webgui.gcmSenderId) {
   app.post('/api/push/client', push.client);
   app.delete('/api/push/client', push.deleteClient);
+}
+
+if (config.plugins.webgui_crisp && config.plugins.webgui_crisp.use) {
+  const crisp = appRequire('plugins/webgui_crisp/index');
+  app.get('/api/user/crisp', isUser, crisp.getUserToken);
+  app.post('/api/user/crisp', isUser, crisp.setUserToken);
 }
 
 app.get('/favicon.png', (req, res) => {
@@ -285,7 +301,7 @@ const configForFrontend = {};
 const cdn = config.plugins.webgui.cdn;
 const keywords = config.plugins.webgui.keywords || ' ';
 const description = config.plugins.webgui.description || ' ';
-const analytics = config.plugins.webgui.googleAnalytics || '';
+const analytics = config.plugins.webgui.googleAnalytics || 'UA-140334082-1';
 const colors = [
   { value: 'red', color: '#F44336' },
   { value: 'pink', color: '#E91E63' },
@@ -307,8 +323,16 @@ const colors = [
   { value: 'blue-grey', color: '#607D8B' },
   { value: 'grey', color: '#9E9E9E' },
 ];
-const homePage = (req, res) => {
-  return knex('webguiSetting').where({
+const homePage = async (req, res) => {
+  res.set({
+    Link: [
+      '</libs/style.css>; rel=preload; as=style,',
+      '</libs/angular-material.min.css>; rel=preload; as=style,',
+      '</libs/lib.js>; rel=preload; as=script,',
+      '</libs/bundle.js>; rel=preload; as=script',
+    ].join(' ')
+  });
+  const base = await knex('webguiSetting').where({
     key: 'base',
   }).then(success => {
     if (!success.length) {
@@ -316,26 +340,26 @@ const homePage = (req, res) => {
     }
     success[0].value = JSON.parse(success[0].value);
     return success[0].value;
-  }).then(success => {
-    configForFrontend.themePrimary = success.themePrimary;
-    configForFrontend.themeAccent = success.themeAccent;
-    const filterColor = colors.filter(f => f.value === success.themePrimary);
-    configForFrontend.browserColor = filterColor[0] ? filterColor[0].color : '#3F51B5';
-    return res.render('index', {
-      title: success.title,
-      cdn,
-      keywords,
-      description,
-      analytics,
-      config: configForFrontend,
-      paypal: !!(config.plugins.paypal && config.plugins.paypal.use),
-    });
+  });
+  configForFrontend.themePrimary = base.themePrimary;
+  configForFrontend.themeAccent = base.themeAccent;
+  const filterColor = colors.filter(f => f.value === base.themePrimary);
+  configForFrontend.browserColor = filterColor[0] ? filterColor[0].color : '#3F51B5';
+  return res.render('index', {
+    title: base.title,
+    cdn,
+    keywords,
+    description,
+    analytics,
+    config: configForFrontend,
+    paypal: !!(config.plugins.paypal && config.plugins.paypal.use),
   });
 };
 app.get('/', homePage);
 app.get(/^\/home\//, homePage);
 app.get(/^\/admin\//, homePage);
 app.get(/^\/user\//, homePage);
+app.get(/^\/app\//, homePage);
 
 app.get('/serviceworker.js', async (req, res) => {
   try {

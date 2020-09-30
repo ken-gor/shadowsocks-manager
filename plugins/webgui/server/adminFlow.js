@@ -121,6 +121,8 @@ exports.getServerPortFlow = (req, res) => {
         }
       }
       return flow.getServerPortFlowWithScale(serverId, accountId, timeArray, account.multiServerFlow);
+    } else if(account.type === 1) {
+      return flow.getServerPortFlowWithScale(serverId, accountId, [Date.now() - 24 * 60 * 60 * 1000 * 365 * 3, Date.now()], account.multiServerFlow);
     } else {
       return [ 0 ];
     }
@@ -171,7 +173,8 @@ exports.getServerPortLastConnect = (req, res) => {
 
 exports.getTopFlow = (req, res) => {
   const group = req.adminInfo.id === 1 ? -1 : req.adminInfo.group;
-  flow.getTopFlow(group)
+  const number = req.query.number ? +req.query.number : 5;
+  flow.getTopFlow(number, group)
   .then(success => {
     res.send(success);
   }).catch(err => {

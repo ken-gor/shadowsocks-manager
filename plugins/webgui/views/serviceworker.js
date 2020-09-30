@@ -1,4 +1,4 @@
-const ONLINE_CACHE_NAME = '2018-12-27 11:21:38 <%= serviceWorkerTime%>';
+const ONLINE_CACHE_NAME = '2020-08-27 17:25:42 <%= serviceWorkerTime%>';
 const isSWOpen = JSON.parse('<%= serviceWorker%>');
 
 const emptyCacheUrl = [];
@@ -14,12 +14,20 @@ const onlineCacheUrl = [
   '/libs/MaterialIcons-Regular.woff',
   '/libs/MaterialIcons-Regular.woff2',
 
+  '/libs/facebook-brands.svg',
+  '/libs/github-brands.svg',
+  '/libs/google-brands.svg',
+  '/libs/twitter-brands.svg',
+
   '/libs/style.css',
   
   '/public/views/skin/bing.html',
   '/public/views/skin/default.html',
   '/public/views/skin/fs_bing.html',
 
+  '/public/views/home/facebook.html',
+  '/public/views/home/github.html',
+  '/public/views/home/google.html',
   '/public/views/home/home.html',
   '/public/views/home/index.html',
   '/public/views/home/login.html',
@@ -28,17 +36,26 @@ const onlineCacheUrl = [
   '/public/views/home/refInput.html',
   '/public/views/home/resetPassword.html',
   '/public/views/home/signup.html',
+  '/public/views/home/social.html',
   '/public/views/home/telegramLogin.html',
+  '/public/views/home/twitter.html',
 
   '/public/views/user/account.html',
   '/public/views/user/changePassword.html',
   '/public/views/user/index.html',
+  '/public/views/user/macAddress.html',
+  '/public/views/user/notice.html',
   '/public/views/user/order.html',
   '/public/views/user/qrcodeDialog.html',
   '/public/views/user/ref.html',
   '/public/views/user/settings.html',
   '/public/views/user/telegram.html',
   '/public/views/user/user.html',
+
+  '/public/views/app/app.html',
+  '/public/views/app/index.html',
+  '/public/views/app/loading.html',
+  '/public/views/app/login.html',
 
   '/public/views/admin/account.html',
   '/public/views/admin/accountPage.html',
@@ -72,13 +89,17 @@ const onlineCacheUrl = [
   '/public/views/admin/pickAccount.html',
   '/public/views/admin/pickTime.html',
   '/public/views/admin/previewNotice.html',
+  '/public/views/admin/recentLogin.html',
+  '/public/views/admin/recentSignup.html',
   '/public/views/admin/refCodeList.html',
   '/public/views/admin/refSetting.html',
   '/public/views/admin/refUserList.html',
   '/public/views/admin/server.html',
   '/public/views/admin/serverPage.html',
+  '/public/views/admin/setExpireTime.html',
   '/public/views/admin/settings.html',
   '/public/views/admin/telegramSetting.html',
+  '/public/views/admin/topFlow.html',
   '/public/views/admin/unfinished.html',
   '/public/views/admin/user.html',
   '/public/views/admin/userPage.html',
@@ -86,11 +107,13 @@ const onlineCacheUrl = [
 
   '/public/views/dialog/addAccount.html',
   '/public/views/dialog/addGiftCardBatch.html',
+  '/public/views/dialog/addMacAccount.html',
   '/public/views/dialog/alert.html',
   '/public/views/dialog/autopop.html',
   '/public/views/dialog/ban.html',
   '/public/views/dialog/changePassword.html',
   '/public/views/dialog/confirm.html',
+  '/public/views/dialog/editUserComment.html',
   '/public/views/dialog/email.html',
   '/public/views/dialog/ip.html',
   '/public/views/dialog/language.html',
@@ -98,8 +121,11 @@ const onlineCacheUrl = [
   '/public/views/dialog/pay.html',
   '/public/views/dialog/payByGiftCard.html',
   '/public/views/dialog/serverChart.html',
+  '/public/views/dialog/setAccountServer.html',
+  '/public/views/dialog/setCurrentAccount.html',
   '/public/views/dialog/setEmail.html',
   '/public/views/dialog/setUserGroup.html',
+  '/public/views/dialog/showWireGuardConfig.html',
   '/public/views/dialog/subscribe.html',
 ];
 

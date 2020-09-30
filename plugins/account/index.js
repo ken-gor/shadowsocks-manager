@@ -5,8 +5,29 @@ const config = appRequire('services/config').all();
 const macAccount = appRequire('plugins/macAccount/index');
 const orderPlugin = appRequire('plugins/webgui_order');
 const accountFlow = appRequire('plugins/account/accountFlow');
+const webguiTag = appRequire('plugins/webgui_tag');
+const redis = appRequire('init/redis').redis;
+
+const runCommand = async cmd => {
+  const exec = require('child_process').exec;
+  return new Promise((resolve, reject) => {
+    exec(cmd, (err, stdout, stderr) => {
+      if(err) {
+        return reject(stderr);
+      } else {
+        return resolve(stdout);
+      }
+    });
+  });
+};
 
 const addAccount = async (type, options) => {
+  let key;
+  try {
+    const privateKey = await runCommand('wg genkey');
+    const publicKey = await runCommand(`echo '${ privateKey.trim() }' | wg pubkey`);
+    key = publicKey.trim() + ':' + privateKey.trim();
+  } catch(err) {}
   if(!options.hasOwnProperty('active')) { options.active = 1; }
   if(type === 6 || type === 7) {
     type = 3;
@@ -18,12 +39,17 @@ const addAccount = async (type, options) => {
       userId: options.user,
       port: options.port,
       password: options.password,
+      data: options.flow > 0 ? JSON.stringify({
+        flow: options.flow,
+      }) : null,
       status: 0,
       server: options.server ? options.server : null,
       autoRemove: 0,
+      multiServerFlow: options.multiServerFlow || 0,
+      key,
     });
     await accountFlow.add(accountId);
-    return;
+    return accountId;
   } else if (type >= 2 && type <= 5) {
     const [ accountId ] = await knex('account_plugin').insert({
       type,
@@ -42,9 +68,10 @@ const addAccount = async (type, options) => {
       autoRemoveDelay: options.autoRemoveDelay || 0,
       multiServerFlow: options.multiServerFlow || 0,
       active: options.active,
+      key,
     });
     await accountFlow.add(accountId);
-    return;
+    return accountId;
   }
 };
 
@@ -86,7 +113,8 @@ const getAccount = async (options = {}) => {
     'user.email as user',
   ])
   .leftJoin('user', 'user.id', 'account_plugin.userId')
-  .where(where);
+  .where(where)
+  .orderBy('account_plugin.id', options.orderById ? 'desc' : 'asc');
   return account;
 };
 
@@ -96,6 +124,7 @@ const getOnlineAccount = async serverId => {
       'saveFlow.id as serverId',
     ]).countDistinct('saveFlow.accountId as online')
     .where('saveFlow.time', '>', Date.now() - 5 * 60 * 1000)
+    .where('saveFlow.flow', '>', 10000)
     .groupBy('saveFlow.id');
     const result = {};
     for(const online of onlines) {
@@ -112,6 +141,7 @@ const getOnlineAccount = async serverId => {
     .where({ 'saveFlow.id': serverId })
     .whereRaw('saveFlow.accountId = account_plugin.id')
     .where('saveFlow.time', '>', Date.now() - 5 * 60 * 1000)
+    .where('saveFlow.flow', '>', 10000)
   );
   return account.map(m => m.id);
 };
@@ -134,6 +164,10 @@ const delAccount = async id => {
     });
   });
   await accountFlow.del(id);
+  if (accountInfo.userId) {
+    await redis.setnx(`Account:${accountInfo.userId}`, `${accountInfo.port}:${accountInfo.password}`);
+    await redis.expire(`Account:${accountInfo.userId}`, 86400);
+  }
   return result;
 };
 
@@ -156,7 +190,13 @@ const editAccount = async (id, options) => {
     update.server = options.server ? JSON.stringify(options.server) : null;
   }
   if(options.type === 1) {
-    update.data = null;
+    if(options.flow && options.flow > 0) {
+      update.data = JSON.stringify({
+        flow: options.flow,
+      });
+    } else {
+      update.data = null;
+    }
   } else if(options.type >= 2 && options.type <= 5) {
     update.data = JSON.stringify({
       create: options.time || Date.now(),
@@ -286,10 +326,12 @@ const addAccountLimitToMonth = async (userId, accountId, number = 1) => {
         return 50000;
       }
     });
+    let password = Math.random().toString().substr(2,10);
+    if(password[0] === '0') { password = '1' + password.substr(1); }
     await addAccount(3, {
       user: userId,
       port,
-      password: Math.random().toString().substr(2,10),
+      password,
       time: Date.now(),
       limit: number,
       flow: 200 * 1000 * 1000 * 1000,
@@ -454,11 +496,13 @@ const setAccountLimit = async (userId, accountId, orderId) => {
       });
     };
     const port = await getNewPort();
+    let password = Math.random().toString().substr(2,10);
+    if(password[0] === '0') { password = '1' + password.substr(1); }
     await addAccount(orderType, {
       orderId,
       user: userId,
       port,
-      password: Math.random().toString().substr(2,10),
+      password,
       time: Date.now(),
       limit,
       flow: orderInfo.flow,
@@ -623,12 +667,14 @@ const addAccountTime = async (userId, accountId, accountType, accountPeriod = 1)
       }
     };
     const port = await getNewPort();
+    let password = Math.random().toString().substr(2,10);
+    if(password[0] === '0') { password = '1' + password.substr(1); }
     await knex('account_plugin').insert({
       type: accountType,
       userId,
       server: getPaymentInfo(accountType).server ? JSON.stringify(getPaymentInfo(accountType).server) : null,
       port,
-      password: Math.random().toString().substr(2,10),
+      password,
       data: JSON.stringify({
         create: Date.now(),
         flow: getPaymentInfo(accountType).flow * 1000 * 1000,
@@ -769,13 +815,22 @@ const getAccountForSubscribe = async (token, ip) => {
   if(account.server) {
     account.server = JSON.parse(account.server);
   }
-  const servers = (await serverManager.list({ status: false })).filter(server => server.type === 'Shadowsocks');
-  const validServers = servers.filter(server => {
-    if(!account.server) { return true; }
-    return account.server.indexOf(server.id) >= 0;
-  });
+  const servers = await serverManager.list({ status: false });
+  const validServers = [];
+  for(const server of servers) {
+    const tags = await webguiTag.getTags('server', server.id);
+    if(tags.includes('#_hide') || tags.includes('#hide')) {
+      continue;
+    }
+    if(!account.server || account.server.includes(server.id)) {
+      validServers.push(server);
+      continue;
+    }
+  }
   return { server: validServers, account };
 };
+
+const sleep = time => new Promise(resolve => setTimeout(resolve, time));
 
 const editMultiAccounts = async (orderId, update) => {
   const accounts = await knex('account_plugin').where({ orderId });
@@ -795,6 +850,7 @@ const editMultiAccounts = async (orderId, update) => {
     if(Object.keys(updateData).length === 0) { break; }
     await knex('account_plugin').update(updateData).where({ id: account.id });
     await accountFlow.edit(account.id);
+    await sleep(500);
   }
 };
 
@@ -844,9 +900,9 @@ const getAccountAndPaging = async (opt) => {
   .where(where);
 
   if(!filter.hasUser && filter.noUser) {
-    account = await account.whereNotNull('user.id');
-  } else if(filter.hasUser && !filter.noUser) {
     account = await account.whereNull('user.id');
+  } else if(filter.hasUser && !filter.noUser) {
+    account = await account.whereNotNull('user.id');
   } else {
     account = await account;
   }
